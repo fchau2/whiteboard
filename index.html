@@ -1,0 +1,135 @@
+
+<style>
+  #wb-wrap { display: flex; flex-direction: column; height: 580px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; background: var(--color-background-primary); }
+  #toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 0.5px solid var(--color-border-tertiary); flex-wrap: wrap; background: var(--color-background-secondary); }
+  .tool-btn { padding: 5px 11px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 13px; color: var(--color-text-primary); }
+  .tool-btn.active { background: var(--color-background-primary); border-color: var(--color-border-primary); font-weight: 500; }
+  .tool-btn:hover { background: var(--color-background-primary); }
+  .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+  .swatch.active { border-color: var(--color-border-primary); }
+  #brush-size { width: 80px; }
+  #canvas { flex: 1; cursor: crosshair; touch-action: none; display: block; width: 100%; }
+  .sep { width: 0.5px; height: 24px; background: var(--color-border-tertiary); margin: 0 2px; }
+  label { font-size: 12px; color: var(--color-text-secondary); }
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Interactive whiteboard — draw using your trackpad or mouse</h2>
+<div id="wb-wrap">
+  <div id="toolbar">
+    <button class="tool-btn active" data-tool="pen" id="btn-pen">Pen</button>
+    <button class="tool-btn" data-tool="eraser" id="btn-eraser">Eraser</button>
+    <button class="tool-btn" id="btn-clear">Clear</button>
+    <div class="sep"></div>
+    <div class="swatch active" data-color="#2c2c2a" style="background:#2c2c2a"></div>
+    <div class="swatch" data-color="#185fa5" style="background:#185fa5"></div>
+    <div class="swatch" data-color="#a32d2d" style="background:#a32d2d"></div>
+    <div class="swatch" data-color="#0f6e56" style="background:#0f6e56"></div>
+    <div class="swatch" data-color="#993556" style="background:#993556"></div>
+    <div class="swatch" data-color="#ba7517" style="background:#ba7517"></div>
+    <div class="swatch" data-color="#534ab7" style="background:#534ab7"></div>
+    <div class="sep"></div>
+    <label>Size</label>
+    <input type="range" id="brush-size" min="1" max="24" value="3" step="1">
+    <span id="size-label" style="font-size:12px;color:var(--color-text-secondary);min-width:20px">3</span>
+  </div>
+  <canvas id="canvas"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('wb-wrap');
+
+let tool = 'pen';
+let color = '#2c2c2a';
+let size = 3;
+let drawing = false;
+let lastX = 0, lastY = 0;
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  ctx.putImageData(img, 0, 0);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+}
+resize();
+window.addEventListener('resize', resize);
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (e.touches) {
+    return [e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top];
+  }
+  return [e.clientX - rect.left, e.clientY - rect.top];
+}
+
+function startDraw(e) {
+  e.preventDefault();
+  drawing = true;
+  [lastX, lastY] = getPos(e);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, (tool === 'eraser' ? size * 4 : size) / 2, 0, Math.PI * 2);
+  ctx.fillStyle = tool === 'eraser' ? '#ffffff' : color;
+  ctx.fill();
+}
+
+function draw(e) {
+  e.preventDefault();
+  if (!drawing) return;
+  const [x, y] = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+  ctx.lineWidth = tool === 'eraser' ? size * 4 : size;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  [lastX, lastY] = [x, y];
+}
+
+function stopDraw(e) { drawing = false; }
+
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDraw);
+canvas.addEventListener('mouseleave', stopDraw);
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', draw, { passive: false });
+canvas.addEventListener('touchend', stopDraw);
+
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tool = btn.dataset.tool;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+document.querySelectorAll('.swatch').forEach(sw => {
+  sw.addEventListener('click', () => {
+    color = sw.dataset.color;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+    if (tool === 'eraser') {
+      tool = 'pen';
+      document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-pen').classList.add('active');
+    }
+  });
+});
+
+const brushSlider = document.getElementById('brush-size');
+const sizeLabel = document.getElementById('size-label');
+brushSlider.addEventListener('input', () => {
+  size = parseInt(brushSlider.value);
+  sizeLabel.textContent = size;
+});
+</script>
